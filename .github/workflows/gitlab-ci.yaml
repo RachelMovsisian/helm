@@ -1,0 +1,19 @@
+# .gitlab-ci.yml
+stages:
+  - update-version
+  - commit-push
+
+variables:
+  VERSION: "1.0.${CI_PIPELINE_IID}"
+
+update-values:
+  stage: update-version
+  image: alpine:latest
+  script:
+    - apk add yq git
+    - yq -i ".image.tag = \"${VERSION}\"" charts/python-app/values.yaml
+    - git config user.name "CI"
+    - git config user.email "ci@example.com"
+    - git add charts/python-app/values.yaml
+    - git commit -m "Update image tag to ${VERSION}"
+    - git push
