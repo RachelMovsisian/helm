@@ -1,19 +1,49 @@
-# .gitlab-ci.yml
-stages:
-  - update-version
-  - commit-push
+name: Update Helm Chart
 
-variables:
-  VERSION: "1.0.${CI_PIPELINE_IID}"
+on:
+  workflow_dispatch:
+    inputs:
+      appVersion:
+        description: 'The new version of the Python application'
+        required: true
+  
+  # Alternatively, trigger on successful build/publish of your Python application
+  repository_dispatch:
+    types: [python-app-published]
 
-update-values:
-  stage: update-version
-  image: alpine:latest
-  script:
-    - apk add yq git
-    - yq -i ".image.tag = \"${VERSION}\"" charts/python-app/values.yaml
-    - git config user.name "CI"
-    - git config user.email "ci@example.com"
-    - git add charts/python-app/values.yaml
-    - git commit -m "Update image tag to ${VERSION}"
-    - git push
+jobs:
+  update-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Yq
+        uses: mikefarah/yq@master
+
+      - name: Update app version in values.yaml
+        run: |
+          # For manual trigger
+          if [[ -n "${{ github.event.inputs.appVersion }}" ]]; then
+            NEW_VERSION="${{ github.event.inputs.appVersion }}"
+          # For automated trigger
+          elif [[ -n "${{ github.event.client_payload.version }}" ]]; then
+            NEW_VERSION="${{ github.event.client_payload.version }}"
+          else
+            echo "No version specified"
+            exit 1
+          fi
+          
+          # Update the version in values.yaml
+          yq e '.image.tag = strenv(NEW_VERSION)' -i my-python-app/values.yaml
+          
+          echo "Updated application version to $NEW_VERSION"
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          git add my-python-app/values.yaml
+          git commit -m "Update app version to $NEW_VERSION"
+          git push
